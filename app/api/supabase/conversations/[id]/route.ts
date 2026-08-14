@@ -1,0 +1,82 @@
+import { supabase } from "@/app/lib/supabase";
+
+const MAX_STEPS = 3;
+
+export async function GET(req: Request, context: any) {
+  const params = await context.params;
+  const conversationId = params?.id as string;
+  const { data: conversation, error: conversationError } = await supabase
+    .from("conversations")
+    .select("id, title, created_at, updated_at")
+    .eq("id", conversationId)
+    .maybeSingle();
+
+  if (conversationError) {
+    return new Response(JSON.stringify({ error: conversationError.message }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  if (!conversation) {
+    return new Response(JSON.stringify({ error: "Conversation not found." }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const { data: messages, error: messagesError } = await supabase
+    .from("messages")
+    .select("id, role, content, created_at")
+    .eq("conversation_id", conversationId)
+    .order("created_at", { ascending: true });
+
+  if (messagesError) {
+    return new Response(JSON.stringify({ error: messagesError.message }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  return new Response(
+    JSON.stringify({ conversation, messages: messages ?? [] }),
+    {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }
+  );
+}
+
+export async function DELETE(req: Request, context: any) {
+  const params = await context.params;
+  const conversationId = params?.id as string;
+
+  const { error: deleteMessagesError } = await supabase
+    .from("messages")
+    .delete()
+    .eq("conversation_id", conversationId);
+
+  if (deleteMessagesError) {
+    return new Response(JSON.stringify({ error: deleteMessagesError.message }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const { error: deleteConversationError } = await supabase
+    .from("conversations")
+    .delete()
+    .eq("id", conversationId);
+
+  if (deleteConversationError) {
+    return new Response(JSON.stringify({ error: deleteConversationError.message }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  return new Response(JSON.stringify({ success: true }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+}
