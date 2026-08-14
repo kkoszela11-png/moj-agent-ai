@@ -1,5 +1,5 @@
 import { google } from "@ai-sdk/google";
-import { streamText, convertToModelMessages, type UIMessage } from "ai";
+import { streamText, convertToModelMessages, stepCountIs, type UIMessage } from "ai";
 import { friendlyError, SEARCH_MODEL } from "@/app/lib/createChatRoute";
 
 export const maxDuration = 30;
@@ -18,7 +18,7 @@ export async function POST(req: Request) {
       google_search: google.tools.googleSearch({}),
       url_context: google.tools.urlContext({}),
     },
-    maxSteps: 3,
+    stopWhen: stepCountIs(3),
     messages: await convertToModelMessages(messages),
   });
 

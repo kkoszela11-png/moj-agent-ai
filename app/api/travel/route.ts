@@ -14,7 +14,6 @@ export async function POST(req: Request) {
     system: TRAVEL_SYSTEM_PROMPT,
     tools: agentTools,
     stopWhen: stepCountIs(10),
-    maxSteps: 3,
     messages: await convertToModelMessages(messages),
   });
 

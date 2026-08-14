@@ -327,7 +327,6 @@ Cytuj źródła (API, Wikipedia, Google).
         : {}),
     },
     stopWhen: stepCountIs(8),
-    maxSteps: 3,
     messages: await convertToModelMessages(messages),
   });
 

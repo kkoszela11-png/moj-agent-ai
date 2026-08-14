@@ -54,7 +54,6 @@ export function createChatRoute(system: string) {
     const result = streamText({
       model: google(MODEL),
       instructions: system,
-      maxSteps: 3,
       messages: await convertToModelMessages(filteredMessages),
     });
 

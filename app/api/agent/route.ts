@@ -179,7 +179,6 @@ export async function POST(req: Request) {
       }),
     },
     stopWhen: stepCountIs(5),
-    maxSteps: 3,
     messages: await convertToModelMessages(filteredMessages),
   });
 
