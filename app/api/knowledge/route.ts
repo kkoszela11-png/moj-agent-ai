@@ -1,11 +1,17 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/app/lib/supabase';
 
-const MAX_STEPS = 3;
-
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    const { data, error } = await supabase.from('documents').select('id,title,created_at,metadata');
+    const userId = new URL(req.url).searchParams.get('user_id');
+    if (!userId) {
+      return NextResponse.json({ error: 'Missing user_id query parameter' }, { status: 400 });
+    }
+
+    const { data, error } = await supabase
+      .from('documents')
+      .select('id,title,created_at,metadata')
+      .eq('user_id', userId);
     if (error) {
       return NextResponse.json({ error }, { status: 500 });
     }

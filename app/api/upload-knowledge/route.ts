@@ -7,14 +7,15 @@ type Req = { title: string; content: string }
 export async function POST(req: Request) {
   try {
     const body: Req = await req.json()
-    const { title, content } = body || {}
-    if (!title || !content) {
-      return NextResponse.json({ error: 'Missing title or content' }, { status: 400 })
+    const { title, content, user_id } = body as Req & { user_id?: string }
+    if (!title || !content || !user_id) {
+      return NextResponse.json({ error: 'Missing title, content or user_id' }, { status: 400 })
     }
 
     const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
     const supabaseKey =
       process.env.SUPABASE_SERVICE_ROLE_KEY ||
+      process.env.SUPABASE_SECRET_KEY ||
       process.env.SUPABASE_SERVICE_KEY ||
       process.env.SUPABASE_ANON_KEY ||
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -75,6 +76,7 @@ export async function POST(req: Request) {
           content: chunk,
           embedding,
           metadata,
+          user_id,
         },
       ])
 

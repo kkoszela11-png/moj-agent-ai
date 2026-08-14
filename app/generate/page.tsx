@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Nav from "../components/Nav";
 
 const EXAMPLES = [
   "Minimalistyczne logo kawiarni w stylu japońskim",
@@ -63,8 +62,6 @@ export default function GeneratePage() {
         padding: "0 16px 40px",
       }}
     >
-      <Nav />
-
       <header style={{ padding: "16px 0 8px" }}>
         <h1 style={{ fontSize: 22, fontWeight: 600 }}>🎨 Generator grafik AI</h1>
         <p style={{ color: "#888", fontSize: 14, marginTop: 4 }}>

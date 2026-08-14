@@ -1,6 +1,4 @@
-import { supabase } from "@/app/lib/supabase";
-
-const MAX_STEPS = 3;
+import { createSupabaseServerClient } from "@/app/lib/supabaseServer";
 
 function serializeConversationRow(row: any) {
   return {
@@ -12,13 +10,23 @@ function serializeConversationRow(row: any) {
 }
 
 export async function GET(req: Request) {
+  const supabase = createSupabaseServerClient();
   const url = new URL(req.url);
   const last = url.searchParams.get("last") === "true";
   const summary = url.searchParams.get("summary") === "true";
+  const userId = url.searchParams.get("user_id");
+
+  if (!userId) {
+    return new Response(JSON.stringify({ error: "Missing user_id query parameter." }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
   const query = supabase
     .from("conversations")
     .select("id, title, created_at, updated_at")
+    .eq("user_id", userId)
     .order("updated_at", { ascending: false });
 
   const { data, error } = last
@@ -83,12 +91,21 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const supabase = createSupabaseServerClient();
   const body = await req.json();
   const title = (body.title as string | undefined) ?? "Nowa rozmowa";
+  const userId = body.user_id as string | undefined;
+
+  if (!userId) {
+    return new Response(JSON.stringify({ error: "Missing user_id in request body." }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
   const { data, error } = await supabase
     .from("conversations")
-    .insert({ title })
+    .insert({ title, user_id: userId })
     .select("id, title, created_at, updated_at")
     .maybeSingle();
 

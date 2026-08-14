@@ -5,6 +5,7 @@ const getSupabase = () => {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
   const key =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SECRET_KEY ||
     process.env.SUPABASE_SERVICE_KEY ||
     process.env.SUPABASE_ANON_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -16,10 +17,18 @@ const getSupabase = () => {
   return createClient(url, key)
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const userId = new URL(req.url).searchParams.get('user_id')
+    if (!userId) {
+      return NextResponse.json({ error: 'Missing user_id query parameter' }, { status: 400 })
+    }
+
     const supabase = getSupabase()
-    const { data, error } = await supabase.from('documents').select('title, metadata, created_at, id, content')
+    const { data, error } = await supabase
+      .from('documents')
+      .select('title, metadata, created_at, id, content')
+      .eq('user_id', userId)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
     // aggregate by title
@@ -45,13 +54,15 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    const { title, content, embedding, metadata } = body || {}
-    if (!title || !content || !Array.isArray(embedding)) {
+    const { title, content, embedding, metadata, user_id } = body || {}
+    if (!title || !content || !Array.isArray(embedding) || !user_id) {
       return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
     }
 
     const supabase = getSupabase()
-    const { error } = await supabase.from('documents').insert([{ title, content, embedding, metadata }])
+    const { error } = await supabase
+      .from('documents')
+      .insert([{ title, content, embedding, metadata, user_id }])
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
     return NextResponse.json({ success: true })
@@ -63,11 +74,16 @@ export async function POST(req: Request) {
 export async function DELETE(req: Request) {
   try {
     const body = await req.json().catch(() => null)
+    const userId = body?.user_id || new URL(req.url).searchParams.get('user_id')
     const title = body?.title || new URL(req.url).searchParams.get('title')
-    if (!title) return NextResponse.json({ error: 'Missing title' }, { status: 400 })
+    if (!title || !userId) return NextResponse.json({ error: 'Missing title or user_id' }, { status: 400 })
 
     const supabase = getSupabase()
-    const { error } = await supabase.from('documents').delete().eq('title', title)
+    const { error } = await supabase
+      .from('documents')
+      .delete()
+      .eq('title', title)
+      .eq('user_id', userId)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
     return NextResponse.json({ success: true })

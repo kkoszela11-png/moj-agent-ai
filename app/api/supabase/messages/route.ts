@@ -1,22 +1,43 @@
-import { supabase } from "@/app/lib/supabase";
-
-const MAX_STEPS = 3;
+import { createSupabaseServerClient } from "@/app/lib/supabaseServer";
 
 export async function POST(req: Request) {
+  const supabase = createSupabaseServerClient();
   const body = await req.json();
   const conversationId = body.conversation_id as string | undefined;
+  const userId = body.user_id as string | undefined;
   const messageId = body.id as string | undefined;
   const role = body.role as string | undefined;
   const content = body.content as string | undefined;
 
-  if (!conversationId || !role || content === undefined) {
+  if (!conversationId || !userId || !role || content === undefined) {
     return new Response(
-      JSON.stringify({ error: "Missing conversation_id, role, or content in request body." }),
+      JSON.stringify({ error: "Missing conversation_id, user_id, role, or content in request body." }),
       {
         status: 400,
         headers: { "Content-Type": "application/json" },
       }
     );
+  }
+
+  const { data: existingConversation, error: conversationError } = await supabase
+    .from("conversations")
+    .select("id")
+    .eq("id", conversationId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (conversationError) {
+    return new Response(JSON.stringify({ error: conversationError.message }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  if (!existingConversation) {
+    return new Response(JSON.stringify({ error: "Conversation not found for this user." }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   const isUuid = (value: string) =>
@@ -73,7 +94,8 @@ export async function POST(req: Request) {
   await supabase
     .from("conversations")
     .update({ updated_at: new Date().toISOString() })
-    .eq("id", conversationId);
+    .eq("id", conversationId)
+    .eq("user_id", userId);
 
   return new Response(JSON.stringify({ id }), {
     status: 200,

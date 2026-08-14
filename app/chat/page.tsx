@@ -2,6 +2,7 @@
 
 import ChatUI from "@/app/components/ChatUI";
 import { useEffect, useState } from "react";
+import { supabase } from "@/app/lib/supabase";
 
 type UIMessage = any;
 
@@ -19,14 +20,24 @@ export default function ChatPage() {
   useEffect(() => {
     async function loadConversation() {
       try {
-        const lastRes = await fetch("/api/supabase/conversations?last=true");
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (!user) {
+          setLoading(false);
+          return;
+        }
+
+        const userId = encodeURIComponent(user.id);
+        const lastRes = await fetch(`/api/supabase/conversations?last=true&user_id=${userId}`);
         const lastData = await lastRes.json();
         if (lastData.conversations?.length > 0) {
           const conversation = lastData.conversations[0];
           setConversationId(conversation.id);
           setConversationTitle(conversation.title || "Nowa rozmowa");
 
-          const messagesRes = await fetch(`/api/supabase/conversations/${conversation.id}`);
+          const messagesRes = await fetch(`/api/supabase/conversations/${conversation.id}?user_id=${userId}`);
           const messagesData = await messagesRes.json();
           if (!messagesData.error) {
             const loadedMessages = messagesData.messages.map((message: any) => ({

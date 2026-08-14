@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { supabase } from "@/app/lib/supabase";
 
 type MessageItem = {
   id: string;
@@ -29,7 +30,17 @@ export default function HistoryDetailsPage() {
   useEffect(() => {
     if (!conversationId) return;
 
-    fetch(`/api/supabase/conversations/${conversationId}`)
+    supabase.auth
+      .getUser()
+      .then(({ data }) => {
+        if (!data.user) {
+          throw new Error("Brak zalogowanego użytkownika.");
+        }
+
+        return fetch(
+          `/api/supabase/conversations/${conversationId}?user_id=${encodeURIComponent(data.user.id)}`
+        );
+      })
       .then((res) => res.json())
       .then((data) => {
         if (data.error) {

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { supabase } from "@/app/lib/supabase";
 
 const LINKS = [
   { href: "/", label: "🏠 Dashboard" },
@@ -19,11 +20,47 @@ const LINKS = [
   { href: "/upload", label: "📚 Baza wiedzy" },
   { href: "/format", label: "📐 Formater" },
   { href: "/oferta", label: "💼 Oferta" },
+  { href: "/email-triage", label: "📧 E-mail Triage" },
+  { href: "/report", label: "📊 Raporty" },
+  { href: "/competitor", label: "🏢 Konkurencja" },
+  { href: "/meeting-summary", label: "📋 Spotkania" },
+  { href: "/posty", label: "🎺 Posty" },
 ];
 
 export default function Nav() {
   const pathname = usePathname();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadUser() {
+      const { data } = await supabase.auth.getUser();
+      if (!mounted) return;
+      setEmail(data.user?.email ?? null);
+    }
+
+    void loadUser();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setEmail(session?.user?.email ?? null);
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
+  }
 
   return (
     <div style={{ marginBottom: 16 }}>
@@ -39,20 +76,37 @@ export default function Nav() {
           <span style={{ fontSize: 18, fontWeight: 700 }}>Mój Agent AI</span>
           <span style={{ color: "#94a3b8", fontSize: 13 }}>Nawigacja</span>
         </div>
-        <button
-          type="button"
-          onClick={() => setOpen((value) => !value)}
-          style={{
-            borderRadius: 12,
-            border: "1px solid #334155",
-            background: "#0f172a",
-            color: "#e2e8f0",
-            padding: "10px 14px",
-            cursor: "pointer",
-          }}
-        >
-          {open ? "Zamknij" : "Menu"}
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button
+            type="button"
+            onClick={() => setOpen((value) => !value)}
+            style={{
+              borderRadius: 12,
+              border: "1px solid #334155",
+              background: "#0f172a",
+              color: "#e2e8f0",
+              padding: "10px 14px",
+              cursor: "pointer",
+            }}
+          >
+            {open ? "Zamknij" : "Menu"}
+          </button>
+          {email && <span style={{ color: "#94a3b8", fontSize: 12 }}>{email}</span>}
+          <button
+            type="button"
+            onClick={handleSignOut}
+            style={{
+              borderRadius: 12,
+              border: "1px solid #7f1d1d",
+              background: "#3f1212",
+              color: "#fecaca",
+              padding: "10px 14px",
+              cursor: "pointer",
+            }}
+          >
+            Wyloguj
+          </button>
+        </div>
       </div>
 
       <nav

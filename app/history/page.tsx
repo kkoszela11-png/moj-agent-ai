@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { supabase } from "@/app/lib/supabase";
 
 type ConversationSummary = {
   id: string;
@@ -18,16 +19,32 @@ export default function HistoryPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/supabase/conversations?summary=true")
-      .then((res) => res.json())
-      .then((data) => {
+    async function loadConversations() {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (!user) {
+          throw new Error("Brak zalogowanego użytkownika.");
+        }
+
+        const res = await fetch(
+          `/api/supabase/conversations?summary=true&user_id=${encodeURIComponent(user.id)}`
+        );
+        const data = await res.json();
         if (data.error) {
           throw new Error(data.error);
         }
         setConversations(data.conversations ?? []);
-      })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+      } catch (err: any) {
+        setError(err.message ?? "Nie udało się pobrać historii.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    void loadConversations();
   }, []);
 
   return (

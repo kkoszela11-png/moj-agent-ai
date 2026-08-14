@@ -1,8 +1,9 @@
-import { supabase } from "@/app/lib/supabase";
+import { createSupabaseServerClient } from "@/app/lib/supabaseServer";
 
 const MAX_STEPS = 3;
 
 export async function GET(req: Request) {
+  const supabase = createSupabaseServerClient();
   const url = new URL(req.url);
   const userId = url.searchParams.get("user_id");
 
@@ -15,7 +16,7 @@ export async function GET(req: Request) {
 
   const { data, error } = await supabase
     .from("user_profiles")
-    .select("id, name, preferences")
+    .select("id, display_name, preferences")
     .eq("id", userId)
     .maybeSingle();
 
@@ -35,8 +36,8 @@ export async function GET(req: Request) {
 
   const { data: created, error: createError } = await supabase
     .from("user_profiles")
-    .insert({ id: userId, preferences: {} })
-    .select("id, name, preferences")
+    .insert({ id: userId, display_name: null, preferences: {} })
+    .select("id, display_name, preferences")
     .maybeSingle();
 
   if (createError) {
@@ -53,9 +54,11 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const supabase = createSupabaseServerClient();
   const body = await req.json();
   const userId = body.user_id as string | undefined;
-  const name = body.name as string | undefined;
+  const displayName = body.display_name as string | null | undefined;
+  const legacyName = body.name as string | undefined;
   const preferences = body.preferences as Record<string, string> | undefined;
 
   if (!userId) {
@@ -67,7 +70,7 @@ export async function POST(req: Request) {
 
   const { data: existing } = await supabase
     .from("user_profiles")
-    .select("id, name, preferences")
+    .select("id, display_name, preferences")
     .eq("id", userId)
     .maybeSingle();
 
@@ -80,14 +83,16 @@ export async function POST(req: Request) {
     preferences: mergedPreferences,
   };
 
-  if (name) {
-    payload.name = name;
+  if (displayName !== undefined) {
+    payload.display_name = displayName;
+  } else if (legacyName) {
+    payload.display_name = legacyName;
   }
 
   const { data, error } = await supabase
     .from("user_profiles")
     .upsert(payload, { onConflict: "id" })
-    .select("id, name, preferences")
+    .select("id, display_name, preferences")
     .maybeSingle();
 
   if (error) {

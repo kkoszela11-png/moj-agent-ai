@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react'
 import { splitIntoChunks } from '../../lib/chunking'
+import { supabase } from '@/app/lib/supabase'
 
 export default function UploadPage() {
   const [title, setTitle] = useState('')
@@ -11,14 +12,31 @@ export default function UploadPage() {
   const [total, setTotal] = useState(0)
   const [message, setMessage] = useState('')
   const [documents, setDocuments] = useState<Array<any>>([])
+  const [userId, setUserId] = useState<string | null>(null)
 
   useEffect(() => {
-    fetchDocuments()
+    async function init() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (!user) {
+        setMessage('Brak zalogowanego użytkownika')
+        return
+      }
+
+      setUserId(user.id)
+      await fetchDocuments(user.id)
+    }
+
+    void init()
   }, [])
 
-  async function fetchDocuments() {
+  async function fetchDocuments(currentUserId = userId) {
+    if (!currentUserId) return
+
     try {
-      const res = await fetch('/api/documents')
+      const res = await fetch(`/api/documents?user_id=${encodeURIComponent(currentUserId)}`)
       const j = await res.json()
       setDocuments(j.documents || [])
     } catch (e) {
@@ -41,6 +59,11 @@ export default function UploadPage() {
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
+    if (!userId) {
+      setMessage('Brak zalogowanego użytkownika')
+      return
+    }
+
     setMessage('')
     setCurrent(0)
     setTotal(0)
@@ -74,7 +97,7 @@ export default function UploadPage() {
         const saveRes = await fetch('/api/documents', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, content: chunks[i], embedding, metadata: { source: title, chunk_index: i, total_chunks: chunks.length } }),
+          body: JSON.stringify({ title, content: chunks[i], embedding, metadata: { source: title, chunk_index: i, total_chunks: chunks.length }, user_id: userId }),
         })
         if (!saveRes.ok) {
           const txt = await saveRes.text().catch(() => '')
@@ -94,9 +117,10 @@ export default function UploadPage() {
   }
 
   async function handleDelete(titleToDelete: string) {
+    if (!userId) return
     if (!confirm(`Usuń dokument "${titleToDelete}"?`)) return
     try {
-      const res = await fetch('/api/documents', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: titleToDelete }) })
+      const res = await fetch('/api/documents', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: titleToDelete, user_id: userId }) })
       if (!res.ok) throw new Error('Delete failed')
       await fetchDocuments()
     } catch (e) {

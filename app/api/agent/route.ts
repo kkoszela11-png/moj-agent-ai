@@ -63,7 +63,8 @@ function safeCalc(expression: string): number {
 }
 
 export async function POST(req: Request) {
-  const { messages }: { messages: UIMessage[] } = await req.json();
+  const body = await req.json();
+  const { messages, user_id }: { messages: UIMessage[]; user_id?: string } = body;
   const origin = new URL(req.url).origin;
   const filteredMessages = (messages ?? []).filter((m: any) => m.role !== "system");
 
@@ -137,6 +138,10 @@ export async function POST(req: Request) {
         }),
         execute: async ({ query }) => {
           try {
+            if (!user_id) {
+              return { results: [], total_found: 0, message: "Brak user_id dla wyszukiwania wiedzy." };
+            }
+
             const supabase = getSupabase();
             const embedding = await getEmbedding(origin, query);
 
@@ -155,7 +160,25 @@ export async function POST(req: Request) {
               return { results: [], total_found: 0, message: "Nie znaleziono informacji w bazie wiedzy." };
             }
 
-            const results = rows.map((row: any) => ({
+            const rowIds = rows.map((row: any) => row.id).filter(Boolean);
+            const { data: allowedDocuments, error: allowedError } = await supabase
+              .from("documents")
+              .select("id")
+              .in("id", rowIds)
+              .eq("user_id", user_id);
+
+            if (allowedError) {
+              return { results: [], total_found: 0, message: `Błąd filtrowania po user_id: ${allowedError.message}` };
+            }
+
+            const allowedIds = new Set((allowedDocuments ?? []).map((doc: any) => doc.id));
+            const filteredRows = rows.filter((row: any) => allowedIds.has(row.id));
+
+            if (filteredRows.length === 0) {
+              return { results: [], total_found: 0, message: "Nie znaleziono informacji w Twojej bazie wiedzy." };
+            }
+
+            const results = filteredRows.map((row: any) => ({
               title: row.title,
               content: row.content,
               similarity: row.similarity,

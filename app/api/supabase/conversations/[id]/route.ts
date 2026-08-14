@@ -1,14 +1,23 @@
-import { supabase } from "@/app/lib/supabase";
-
-const MAX_STEPS = 3;
+import { createSupabaseServerClient } from "@/app/lib/supabaseServer";
 
 export async function GET(req: Request, context: any) {
+  const supabase = createSupabaseServerClient();
+  const url = new URL(req.url);
+  const userId = url.searchParams.get("user_id");
+  if (!userId) {
+    return new Response(JSON.stringify({ error: "Missing user_id query parameter." }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   const params = await context.params;
   const conversationId = params?.id as string;
   const { data: conversation, error: conversationError } = await supabase
     .from("conversations")
     .select("id, title, created_at, updated_at")
     .eq("id", conversationId)
+    .eq("user_id", userId)
     .maybeSingle();
 
   if (conversationError) {
@@ -48,8 +57,39 @@ export async function GET(req: Request, context: any) {
 }
 
 export async function DELETE(req: Request, context: any) {
+  const supabase = createSupabaseServerClient();
+  const url = new URL(req.url);
+  const userId = url.searchParams.get("user_id");
+  if (!userId) {
+    return new Response(JSON.stringify({ error: "Missing user_id query parameter." }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   const params = await context.params;
   const conversationId = params?.id as string;
+
+  const { data: existingConversation, error: conversationError } = await supabase
+    .from("conversations")
+    .select("id")
+    .eq("id", conversationId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (conversationError) {
+    return new Response(JSON.stringify({ error: conversationError.message }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  if (!existingConversation) {
+    return new Response(JSON.stringify({ error: "Conversation not found." }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
   const { error: deleteMessagesError } = await supabase
     .from("messages")
@@ -66,7 +106,8 @@ export async function DELETE(req: Request, context: any) {
   const { error: deleteConversationError } = await supabase
     .from("conversations")
     .delete()
-    .eq("id", conversationId);
+    .eq("id", conversationId)
+    .eq("user_id", userId);
 
   if (deleteConversationError) {
     return new Response(JSON.stringify({ error: deleteConversationError.message }), {

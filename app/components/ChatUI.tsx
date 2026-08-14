@@ -5,7 +5,7 @@ import { DefaultChatTransport, type FileUIPart } from "ai";
 import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import Nav from "./Nav";
+import { supabase } from "@/app/lib/supabase";
 
 type AttachedImage = { url: string; mediaType: string; filename?: string };
 
@@ -72,17 +72,20 @@ export default function ChatUI({
   onMessagesUpdated,
   onConversationId,
 }: Props) {
-  const transport = useMemo(() => new DefaultChatTransport({ api }), [api]);
+  const [userId, setUserId] = useState<string | null>(null);
+  const transport = useMemo(
+    () => new DefaultChatTransport({ api, body: userId ? { user_id: userId } : undefined }),
+    [api, userId]
+  );
   const { messages, sendMessage, status, setMessages } = useChat({ transport });
   const [input, setInput] = useState("");
   const [attached, setAttached] = useState<AttachedImage | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [imgError, setImgError] = useState("");
-  const [userId, setUserId] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(conversationIdProp ?? null);
   const [userProfile, setUserProfile] = useState<{
     id: string;
-    name: string | null;
+    display_name: string | null;
     preferences: Record<string, string>;
   } | null>(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
@@ -104,10 +107,10 @@ export default function ChatUI({
 
   function buildProfileInstructions(profile: {
     id: string;
-    name: string | null;
+    display_name: string | null;
     preferences: Record<string, string>;
   }) {
-    if (!profile.name) {
+    if (!profile.display_name) {
       return "To nowy użytkownik. Przywitaj się po polsku i zapytaj, jak ma na imię.";
     }
 
@@ -115,7 +118,7 @@ export default function ChatUI({
     const city = prefs.miasto ? `Mieszka w ${prefs.miasto}.` : "";
     const food = prefs.ulubione_jedzenie ? `Lubi ${prefs.ulubione_jedzenie}.` : "";
 
-    return `Użytkownik ma na imię ${profile.name}. ${city} ${food} Pamiętaj tę informację i w kolejnych odpowiedziach zwracaj się do niego po imieniu.`;
+    return `Użytkownik ma na imię ${profile.display_name}. ${city} ${food} Pamiętaj tę informację i w kolejnych odpowiedziach zwracaj się do niego po imieniu.`;
   }
 
   async function loadProfile(id: string) {
@@ -128,7 +131,7 @@ export default function ChatUI({
     setProfileLoaded(true);
   }
 
-  async function updateProfile(update: { name?: string; preferences?: Record<string, string> }) {
+  async function updateProfile(update: { display_name?: string; preferences?: Record<string, string> }) {
     if (!userId) return;
     const res = await fetch("/api/supabase/user-profile", {
       method: "POST",
@@ -143,7 +146,7 @@ export default function ChatUI({
   }
 
   async function saveMessageToSupabase(message: any) {
-    if (!conversationId) return;
+    if (!conversationId || !userId) return;
     const content = getMessageText(message);
     if (!content) return;
 
@@ -152,6 +155,7 @@ export default function ChatUI({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         conversation_id: conversationId,
+        user_id: userId,
         role: message.role,
         content,
         id: message.id,
@@ -161,11 +165,11 @@ export default function ChatUI({
 
   function parseProfileUpdate(text: string) {
     const normalized = text.toLowerCase();
-    const update: { name?: string; preferences?: Record<string, string> } = {};
+    const update: { display_name?: string; preferences?: Record<string, string> } = {};
 
     const nameMatch = text.match(/(?:mam na imię|nazywam się)\s+([A-ZĄĆĘŁŃÓŚŹŻ][a-ząćęłńóśźż]+)/i);
     if (nameMatch) {
-      update.name = nameMatch[1];
+      update.display_name = nameMatch[1];
     }
 
     const cityMatch = text.match(/(?:mieszkam w|jestem z)\s+([A-ZĄĆĘŁŃÓŚŹŻ][a-ząćęłńóśźż\s-]+)/i);
@@ -189,21 +193,28 @@ export default function ChatUI({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    let storedUserId = window.localStorage.getItem("user_id");
-    if (!storedUserId) {
-      storedUserId = crypto.randomUUID();
-      window.localStorage.setItem("user_id", storedUserId);
-    }
-    setUserId(storedUserId);
-    loadProfile(storedUserId);
 
-    const storedConversationId = window.localStorage.getItem("conversation_id");
-    if (storedConversationId) {
-      setConversationId(storedConversationId);
-      if (onConversationId) {
-        onConversationId(storedConversationId);
+    async function initUser() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) return;
+
+      setUserId(user.id);
+      await loadProfile(user.id);
+
+      const storedConversationId = window.localStorage.getItem("conversation_id");
+      if (storedConversationId) {
+        setConversationId(storedConversationId);
+        if (onConversationId) {
+          onConversationId(storedConversationId);
+        }
       }
     }
+
+    void initUser();
+
   }, [onConversationId]);
 
   useEffect(() => {
@@ -256,7 +267,7 @@ export default function ChatUI({
 
       if (message.role === "user") {
         const update = parseProfileUpdate(text);
-        if (update.name || update.preferences) {
+        if (update.display_name || update.preferences) {
           updateProfile(update).catch((error) => {
             console.error("Błąd aktualizacji profilu użytkownika:", error);
           });
@@ -340,12 +351,13 @@ export default function ChatUI({
 
   async function ensureConversation() {
     if (conversationId) return conversationId;
+    if (!userId) return null;
 
     const title = input.trim().slice(0, 50) || "Nowa rozmowa";
     const response = await fetch("/api/supabase/conversations", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title }),
+      body: JSON.stringify({ title, user_id: userId }),
     });
     const data = await response.json();
     if (!data.error && data.id) {
@@ -432,9 +444,6 @@ export default function ChatUI({
           🖱️ Upuść obraz
         </div>
       )}
-
-      <Nav />
-
       <header style={{ padding: "16px 0 8px" }}>
         <h1 style={{ fontSize: 22, fontWeight: 600 }}>{title}</h1>
         {subtitle && (
