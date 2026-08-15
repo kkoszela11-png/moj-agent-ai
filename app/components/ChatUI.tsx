@@ -79,8 +79,9 @@ export default function ChatUI({
       new DefaultChatTransport({
         api,
         body: userId ? { user_id: userId } : undefined,
-        headers: () =>
-          accessTokenRef.current ? { Authorization: `Bearer ${accessTokenRef.current}` } : {},
+        headers: () => ({
+          ...(accessTokenRef.current ? { Authorization: `Bearer ${accessTokenRef.current}` } : {}),
+        }),
       }),
     [api, userId]
   );
