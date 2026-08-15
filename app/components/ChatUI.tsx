@@ -5,7 +5,7 @@ import { DefaultChatTransport, type FileUIPart } from "ai";
 import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { supabase } from "@/app/lib/supabase";
+import { supabase, getAuthHeaders } from "@/app/lib/supabase";
 
 type AttachedImage = { url: string; mediaType: string; filename?: string };
 
@@ -73,8 +73,15 @@ export default function ChatUI({
   onConversationId,
 }: Props) {
   const [userId, setUserId] = useState<string | null>(null);
+  const accessTokenRef = useRef<string | null>(null);
   const transport = useMemo(
-    () => new DefaultChatTransport({ api, body: userId ? { user_id: userId } : undefined }),
+    () =>
+      new DefaultChatTransport({
+        api,
+        body: userId ? { user_id: userId } : undefined,
+        headers: () =>
+          accessTokenRef.current ? { Authorization: `Bearer ${accessTokenRef.current}` } : {},
+      }),
     [api, userId]
   );
   const { messages, sendMessage, status, setMessages } = useChat({ transport });
@@ -122,7 +129,9 @@ export default function ChatUI({
   }
 
   async function loadProfile(id: string) {
-    const res = await fetch(`/api/supabase/user-profile?user_id=${encodeURIComponent(id)}`);
+    const res = await fetch(`/api/supabase/user-profile?user_id=${encodeURIComponent(id)}`, {
+      headers: await getAuthHeaders(),
+    });
     const data = await res.json();
     if (!data.error) {
       setUserProfile(data);
@@ -135,8 +144,8 @@ export default function ChatUI({
     if (!userId) return;
     const res = await fetch("/api/supabase/user-profile", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: userId, ...update }),
+      headers: { "Content-Type": "application/json", ...(await getAuthHeaders()) },
+      body: JSON.stringify(update),
     });
     const data = await res.json();
     if (!data.error) {
@@ -152,10 +161,9 @@ export default function ChatUI({
 
     await fetch("/api/supabase/messages", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(await getAuthHeaders()) },
       body: JSON.stringify({
         conversation_id: conversationId,
-        user_id: userId,
         role: message.role,
         content,
         id: message.id,
@@ -200,6 +208,9 @@ export default function ChatUI({
       } = await supabase.auth.getUser();
 
       if (!user) return;
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      accessTokenRef.current = sessionData.session?.access_token ?? null;
 
       setUserId(user.id);
       await loadProfile(user.id);
@@ -356,8 +367,8 @@ export default function ChatUI({
     const title = input.trim().slice(0, 50) || "Nowa rozmowa";
     const response = await fetch("/api/supabase/conversations", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, user_id: userId }),
+      headers: { "Content-Type": "application/json", ...(await getAuthHeaders()) },
+      body: JSON.stringify({ title }),
     });
     const data = await response.json();
     if (!data.error && data.id) {

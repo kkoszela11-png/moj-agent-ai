@@ -1,17 +1,22 @@
 import { createSupabaseServerClient } from "@/app/lib/supabaseServer";
+import { getAuthenticatedUserId, unauthorizedResponse } from "@/app/lib/authServer";
 
 export async function POST(req: Request) {
   const supabase = createSupabaseServerClient();
+  const userId = await getAuthenticatedUserId(req);
+  if (!userId) {
+    return unauthorizedResponse();
+  }
+
   const body = await req.json();
   const conversationId = body.conversation_id as string | undefined;
-  const userId = body.user_id as string | undefined;
   const messageId = body.id as string | undefined;
   const role = body.role as string | undefined;
   const content = body.content as string | undefined;
 
-  if (!conversationId || !userId || !role || content === undefined) {
+  if (!conversationId || !role || content === undefined) {
     return new Response(
-      JSON.stringify({ error: "Missing conversation_id, user_id, role, or content in request body." }),
+      JSON.stringify({ error: "Missing conversation_id, role, or content in request body." }),
       {
         status: 400,
         headers: { "Content-Type": "application/json" },

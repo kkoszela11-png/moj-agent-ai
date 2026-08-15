@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { supabase } from "@/app/lib/supabase";
+import { supabase, getAuthHeaders } from "@/app/lib/supabase";
 
 type MessageItem = {
   id: string;
@@ -32,13 +32,14 @@ export default function HistoryDetailsPage() {
 
     supabase.auth
       .getUser()
-      .then(({ data }) => {
+      .then(async ({ data }) => {
         if (!data.user) {
           throw new Error("Brak zalogowanego użytkownika.");
         }
 
         return fetch(
-          `/api/supabase/conversations/${conversationId}?user_id=${encodeURIComponent(data.user.id)}`
+          `/api/supabase/conversations/${conversationId}?user_id=${encodeURIComponent(data.user.id)}`,
+          { headers: await getAuthHeaders() }
         );
       })
       .then((res) => res.json())

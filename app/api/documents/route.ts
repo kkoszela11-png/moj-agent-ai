@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { getAuthenticatedUserId } from '@/app/lib/authServer'
 
 const getSupabase = () => {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -19,9 +20,9 @@ const getSupabase = () => {
 
 export async function GET(req: Request) {
   try {
-    const userId = new URL(req.url).searchParams.get('user_id')
+    const userId = await getAuthenticatedUserId(req)
     if (!userId) {
-      return NextResponse.json({ error: 'Missing user_id query parameter' }, { status: 400 })
+      return NextResponse.json({ error: 'Brak autoryzacji. Zaloguj się ponownie.' }, { status: 401 })
     }
 
     const supabase = getSupabase()
@@ -53,16 +54,21 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
+    const userId = await getAuthenticatedUserId(req)
+    if (!userId) {
+      return NextResponse.json({ error: 'Brak autoryzacji. Zaloguj się ponownie.' }, { status: 401 })
+    }
+
     const body = await req.json()
-    const { title, content, embedding, metadata, user_id } = body || {}
-    if (!title || !content || !Array.isArray(embedding) || !user_id) {
+    const { title, content, embedding, metadata } = body || {}
+    if (!title || !content || !Array.isArray(embedding)) {
       return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
     }
 
     const supabase = getSupabase()
     const { error } = await supabase
       .from('documents')
-      .insert([{ title, content, embedding, metadata, user_id }])
+      .insert([{ title, content, embedding, metadata, user_id: userId }])
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
     return NextResponse.json({ success: true })
@@ -73,10 +79,14 @@ export async function POST(req: Request) {
 
 export async function DELETE(req: Request) {
   try {
+    const userId = await getAuthenticatedUserId(req)
+    if (!userId) {
+      return NextResponse.json({ error: 'Brak autoryzacji. Zaloguj się ponownie.' }, { status: 401 })
+    }
+
     const body = await req.json().catch(() => null)
-    const userId = body?.user_id || new URL(req.url).searchParams.get('user_id')
     const title = body?.title || new URL(req.url).searchParams.get('title')
-    if (!title || !userId) return NextResponse.json({ error: 'Missing title or user_id' }, { status: 400 })
+    if (!title) return NextResponse.json({ error: 'Missing title' }, { status: 400 })
 
     const supabase = getSupabase()
     const { error } = await supabase

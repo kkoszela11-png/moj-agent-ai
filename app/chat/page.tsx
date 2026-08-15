@@ -2,7 +2,7 @@
 
 import ChatUI from "@/app/components/ChatUI";
 import { useEffect, useState } from "react";
-import { supabase } from "@/app/lib/supabase";
+import { supabase, getAuthHeaders } from "@/app/lib/supabase";
 
 type UIMessage = any;
 
@@ -30,14 +30,19 @@ export default function ChatPage() {
         }
 
         const userId = encodeURIComponent(user.id);
-        const lastRes = await fetch(`/api/supabase/conversations?last=true&user_id=${userId}`);
+        const authHeaders = await getAuthHeaders();
+        const lastRes = await fetch(`/api/supabase/conversations?last=true&user_id=${userId}`, {
+          headers: authHeaders,
+        });
         const lastData = await lastRes.json();
         if (lastData.conversations?.length > 0) {
           const conversation = lastData.conversations[0];
           setConversationId(conversation.id);
           setConversationTitle(conversation.title || "Nowa rozmowa");
 
-          const messagesRes = await fetch(`/api/supabase/conversations/${conversation.id}?user_id=${userId}`);
+          const messagesRes = await fetch(`/api/supabase/conversations/${conversation.id}?user_id=${userId}`, {
+            headers: authHeaders,
+          });
           const messagesData = await messagesRes.json();
           if (!messagesData.error) {
             const loadedMessages = messagesData.messages.map((message: any) => ({

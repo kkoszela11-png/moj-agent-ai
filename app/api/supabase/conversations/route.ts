@@ -1,4 +1,5 @@
 import { createSupabaseServerClient } from "@/app/lib/supabaseServer";
+import { getAuthenticatedUserId, unauthorizedResponse } from "@/app/lib/authServer";
 
 function serializeConversationRow(row: any) {
   return {
@@ -14,13 +15,10 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const last = url.searchParams.get("last") === "true";
   const summary = url.searchParams.get("summary") === "true";
-  const userId = url.searchParams.get("user_id");
+  const userId = await getAuthenticatedUserId(req);
 
   if (!userId) {
-    return new Response(JSON.stringify({ error: "Missing user_id query parameter." }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
+    return unauthorizedResponse();
   }
 
   const query = supabase
@@ -92,16 +90,14 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const supabase = createSupabaseServerClient();
-  const body = await req.json();
-  const title = (body.title as string | undefined) ?? "Nowa rozmowa";
-  const userId = body.user_id as string | undefined;
+  const userId = await getAuthenticatedUserId(req);
 
   if (!userId) {
-    return new Response(JSON.stringify({ error: "Missing user_id in request body." }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
+    return unauthorizedResponse();
   }
+
+  const body = await req.json();
+  const title = (body.title as string | undefined) ?? "Nowa rozmowa";
 
   const { data, error } = await supabase
     .from("conversations")

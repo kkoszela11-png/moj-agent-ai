@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react'
 import { splitIntoChunks } from '../../lib/chunking'
-import { supabase } from '@/app/lib/supabase'
+import { supabase, getAuthHeaders } from '@/app/lib/supabase'
 
 export default function UploadPage() {
   const [title, setTitle] = useState('')
@@ -36,7 +36,9 @@ export default function UploadPage() {
     if (!currentUserId) return
 
     try {
-      const res = await fetch(`/api/documents?user_id=${encodeURIComponent(currentUserId)}`)
+      const res = await fetch(`/api/documents?user_id=${encodeURIComponent(currentUserId)}`, {
+        headers: await getAuthHeaders(),
+      })
       const j = await res.json()
       setDocuments(j.documents || [])
     } catch (e) {
@@ -96,8 +98,8 @@ export default function UploadPage() {
         // save chunk
         const saveRes = await fetch('/api/documents', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, content: chunks[i], embedding, metadata: { source: title, chunk_index: i, total_chunks: chunks.length }, user_id: userId }),
+          headers: { 'Content-Type': 'application/json', ...(await getAuthHeaders()) },
+          body: JSON.stringify({ title, content: chunks[i], embedding, metadata: { source: title, chunk_index: i, total_chunks: chunks.length } }),
         })
         if (!saveRes.ok) {
           const txt = await saveRes.text().catch(() => '')
@@ -120,7 +122,11 @@ export default function UploadPage() {
     if (!userId) return
     if (!confirm(`Usuń dokument "${titleToDelete}"?`)) return
     try {
-      const res = await fetch('/api/documents', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: titleToDelete, user_id: userId }) })
+      const res = await fetch('/api/documents', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', ...(await getAuthHeaders()) },
+        body: JSON.stringify({ title: titleToDelete }),
+      })
       if (!res.ok) throw new Error('Delete failed')
       await fetchDocuments()
     } catch (e) {

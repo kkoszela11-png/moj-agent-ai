@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { supabase } from "@/app/lib/supabase";
+import { supabase, getAuthHeaders } from "@/app/lib/supabase";
 
 type ConversationSummary = {
   id: string;
@@ -30,7 +30,8 @@ export default function HistoryPage() {
         }
 
         const res = await fetch(
-          `/api/supabase/conversations?summary=true&user_id=${encodeURIComponent(user.id)}`
+          `/api/supabase/conversations?summary=true&user_id=${encodeURIComponent(user.id)}`,
+          { headers: await getAuthHeaders() }
         );
         const data = await res.json();
         if (data.error) {

@@ -10,6 +10,8 @@ import { z } from "zod";
 import { friendlyError, MODEL } from "@/app/lib/createChatRoute";
 import { generateImageData } from "@/app/lib/imageGen";
 import { createClient } from "@supabase/supabase-js";
+import { getAuthenticatedUserId } from "@/app/lib/authServer";
+import { validateChatInput, createBlockedResponse, logSecurityEvent } from "@/app/lib/inputValidation";
 
 export const maxDuration = 60;
 
@@ -64,9 +66,34 @@ function safeCalc(expression: string): number {
 
 export async function POST(req: Request) {
   const body = await req.json();
-  const { messages, user_id }: { messages: UIMessage[]; user_id?: string } = body;
+  const { messages }: { messages: UIMessage[] } = body;
+  const user_id = await getAuthenticatedUserId(req);
   const origin = new URL(req.url).origin;
   const filteredMessages = (messages ?? []).filter((m: any) => m.role !== "system");
+
+  const lastUserMessage = [...filteredMessages].reverse().find((m: any) => m.role === "user");
+  const lastUserText = (lastUserMessage?.parts ?? [])
+    .filter((part: any) => part.type === "text")
+    .map((part: any) => part.text as string)
+    .join("");
+
+  if (lastUserMessage && lastUserText) {
+    const validation = validateChatInput(lastUserText);
+
+    if (validation.blocked) {
+      await logSecurityEvent({
+        userId: user_id,
+        attackType: "input_validation",
+        blocked: true,
+        detail: validation.reason,
+      });
+      return createBlockedResponse();
+    }
+
+    lastUserMessage.parts = lastUserMessage.parts.map((part: any) =>
+      part.type === "text" ? { ...part, text: validation.sanitized } : part
+    );
+  }
 
   const result = streamText({
     // UWAGA: Gemini nie pozwala łączyć wyszukiwarki Google (grounding) z własnymi
@@ -202,6 +229,20 @@ export async function POST(req: Request) {
       }),
     },
     stopWhen: stepCountIs(5),
+    onEnd: async ({ usage }) => {
+      try {
+        const supabase = getSupabase();
+        await supabase.from("api_usage").insert({
+          user_id: user_id ?? "anonymous",
+          endpoint: "agent",
+          input_tokens: usage.inputTokens ?? null,
+          output_tokens: usage.outputTokens ?? null,
+          total_tokens: usage.totalTokens ?? null,
+        });
+      } catch (e) {
+        console.error("Nie udało się zapisać api_usage:", e);
+      }
+    },
     messages: await convertToModelMessages(filteredMessages),
   });
 

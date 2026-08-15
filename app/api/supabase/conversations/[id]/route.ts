@@ -1,14 +1,11 @@
 import { createSupabaseServerClient } from "@/app/lib/supabaseServer";
+import { getAuthenticatedUserId, unauthorizedResponse } from "@/app/lib/authServer";
 
 export async function GET(req: Request, context: any) {
   const supabase = createSupabaseServerClient();
-  const url = new URL(req.url);
-  const userId = url.searchParams.get("user_id");
+  const userId = await getAuthenticatedUserId(req);
   if (!userId) {
-    return new Response(JSON.stringify({ error: "Missing user_id query parameter." }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
+    return unauthorizedResponse();
   }
 
   const params = await context.params;
@@ -58,13 +55,9 @@ export async function GET(req: Request, context: any) {
 
 export async function DELETE(req: Request, context: any) {
   const supabase = createSupabaseServerClient();
-  const url = new URL(req.url);
-  const userId = url.searchParams.get("user_id");
+  const userId = await getAuthenticatedUserId(req);
   if (!userId) {
-    return new Response(JSON.stringify({ error: "Missing user_id query parameter." }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
+    return unauthorizedResponse();
   }
 
   const params = await context.params;

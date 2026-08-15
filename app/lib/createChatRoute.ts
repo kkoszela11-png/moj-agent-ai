@@ -1,6 +1,7 @@
 import { google } from "@ai-sdk/google";
 import { streamText, convertToModelMessages, tool, type UIMessage } from "ai";
 import { createSupabaseServerClient } from "@/app/lib/supabaseServer";
+import { getAuthenticatedUserId } from "@/app/lib/authServer";
 import { z } from "zod";
 
 /**
@@ -69,7 +70,7 @@ export function createChatRoute(system: string) {
   return async function POST(req: Request) {
     const body = await req.json();
     const messages = (body?.messages ?? []) as UIMessage[];
-    const userId = (body?.user_id ?? null) as string | null;
+    const userId = await getAuthenticatedUserId(req);
     const displayName = await getDisplayName(userId);
 
     const dynamicSystem = `Jesteś pomocnym asystentem AI.

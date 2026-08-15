@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import AuthGate from "@/app/components/AuthGate";
+import Nav from "@/app/components/Nav";
 
 export const metadata: Metadata = {
   title: "Mój Agent AI",
@@ -15,7 +15,10 @@ export default function RootLayout({
   return (
     <html lang="pl">
       <body>
-        <AuthGate>{children}</AuthGate>
+        <div style={{ maxWidth: 960, margin: "0 auto", padding: "0 16px" }}>
+          <Nav />
+        </div>
+        {children}
       </body>
     </html>
   );

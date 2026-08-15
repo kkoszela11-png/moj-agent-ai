@@ -1,17 +1,14 @@
 import { createSupabaseServerClient } from "@/app/lib/supabaseServer";
+import { getAuthenticatedUserId, unauthorizedResponse } from "@/app/lib/authServer";
 
 const MAX_STEPS = 3;
 
 export async function GET(req: Request) {
   const supabase = createSupabaseServerClient();
-  const url = new URL(req.url);
-  const userId = url.searchParams.get("user_id");
+  const userId = await getAuthenticatedUserId(req);
 
   if (!userId) {
-    return new Response(JSON.stringify({ error: "Missing user_id query parameter." }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
+    return unauthorizedResponse();
   }
 
   const { data, error } = await supabase
@@ -55,18 +52,16 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const supabase = createSupabaseServerClient();
+  const userId = await getAuthenticatedUserId(req);
+
+  if (!userId) {
+    return unauthorizedResponse();
+  }
+
   const body = await req.json();
-  const userId = body.user_id as string | undefined;
   const displayName = body.display_name as string | null | undefined;
   const legacyName = body.name as string | undefined;
   const preferences = body.preferences as Record<string, string> | undefined;
-
-  if (!userId) {
-    return new Response(JSON.stringify({ error: "Missing user_id in request body." }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
 
   const { data: existing } = await supabase
     .from("user_profiles")
